@@ -99,11 +99,12 @@ def listar_productos():
         data = []
         for row in rows:
             data.append({
-                "id": row[0],
-                "nombre": row[1],
-                "precio": float(row[2]) if row[2] is not None else None,
-                "imagen_url": row[3],
-            })
+    "id": row[0],
+    "nombre": row[1],
+    "precio": float(row[2]) if row[2] is not None else None,
+    "stock": int(row[3]) if row[3] is not None else 0,
+    "imagen_url": row[4],
+})
 
         return jsonify({
             "success": True,
