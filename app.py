@@ -1,28 +1,25 @@
 import os
-import smtplib
-from email.mime.text import MIMEText
 from flask import Flask, jsonify, request
 from mssql_python import connect
+import resend
+
+resend.api_key = os.getenv("RESEND_API_KEY")
 
 app = Flask(__name__)
 
-EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-
-
 def enviar_correo_alerta(asunto, mensaje, destino):
-    if not EMAIL_USER or not EMAIL_PASSWORD:
-        raise ValueError("Faltan variables de entorno de correo")
+    if not resend.api_key:
+        raise ValueError("Falta RESEND_API_KEY")
 
-    msg = MIMEText(mensaje, "html")
-    msg["Subject"] = asunto
-    msg["From"] = EMAIL_USER
-    msg["To"] = destino
+    params = {
+        "from": "onboarding@resend.dev",
+        "to": [destino],
+        "subject": asunto,
+        "html": f"<p>{mensaje}</p>"
+    }
 
-    with smtplib.SMTP("smtp.gmail.com", 587) as server:
-        server.starttls()
-        server.login(EMAIL_USER, EMAIL_PASSWORD)
-        server.send_message(msg)
+    response = resend.Emails.send(params)
+    return response
 
 def get_connection():
     server = os.getenv("DB_SERVER")
@@ -142,28 +139,35 @@ def listar_productos():
 
 
 @app.route("/enviar-alerta", methods=["POST"])
-def enviar_correo_alerta(asunto, mensaje, destino):
-    if not EMAIL_USER or not EMAIL_PASSWORD:
-        raise ValueError("Faltan variables de entorno EMAIL")
-
-    msg = MIMEText(mensaje, "html")
-    msg["Subject"] = asunto
-    msg["From"] = EMAIL_USER
-    msg["To"] = destino
-
+def enviar_alerta():
     try:
-        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=20)
-        server.ehlo()
-        server.starttls()
-        server.ehlo()
+        data = request.get_json()
 
-        server.login(EMAIL_USER, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_USER, destino, msg.as_string())
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "No se recibió JSON"
+            }), 400
 
-        server.quit()
+        destino = data.get("to")
+        asunto = data.get("subject")
+        mensaje = data.get("message")
+
+        if not destino or not asunto or not mensaje:
+            return jsonify({
+                "success": False,
+                "error": "Faltan campos"
+            }), 400
+
+        resp = enviar_correo_alerta(asunto, mensaje, destino)
+
+        return jsonify({
+            "success": True,
+            "message": "Correo enviado",
+            "resend": resp
+        })
 
     except Exception as e:
-        print("ERROR BACKEND:", str(e))
         return jsonify({
             "success": False,
             "error": str(e)
