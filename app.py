@@ -1,21 +1,25 @@
-import os
+import os 
+import resend
 from flask import Flask, jsonify, request
 from mssql_python import connect
-import resend
-import threading
-
-resend.api_key = os.getenv("RESEND_API_KEY")
-FROM_EMAIL = os.environ.get("MAIL_RESEND", "onboarding@resend.dev")
 
 app = Flask(__name__)
 
-def enviar_correo_resend(destino, asunto, mensaje):
-    resend.Emails.send({
-        "from": FROM_EMAIL,
-        "to": [destino],
-        "subject": asunto,
-        "html": f"<p>{mensaje}</p>"
-    })
+resend.api_key = os.getenv("RESEND_API_KEY")
+
+def enviar_correo_alerta(asunto, mensaje, destino):
+    try:
+        
+        r = resend.Emails.send({
+            "from": "onboarding@resend.dev",
+            "to": destino,
+            "subject": asunto,
+            "html": f"<p>{mensaje}</p>"
+        })
+        return r
+    except Exception as e:
+        print(f"Error en Resend: {e}")
+        raise e
 
 def get_connection():
     server = os.getenv("DB_SERVER")
@@ -134,33 +138,28 @@ def listar_productos():
             conn.close()
 
 
-@app.route("/enviar-alerta-resend", methods=["POST"])
-def enviar_alerta_resend():
-    data = request.json
-
-    correo = data.get("email")
-    asunto = data.get("subject", "Notificación")
-    mensaje = data.get("message", "Mensaje desde Render")
-
-    if not correo:
-        return jsonify({"error": "Falta el email"}), 400
-
+@app.route("/enviar-alerta", methods=["POST"])
+def enviar_alerta():
     try:
-        # Evita WORKER TIMEOUT
-        threading.Thread(target=enviar_correo_resend, args=(correo, asunto, mensaje)).start()
+        data = request.get_json(force=True)
+        destino = data.get("to")
+        asunto = data.get("subject")
+        mensaje = data.get("message")
+        
+        if not all([destino, asunto, mensaje]):
+             return jsonify({"success": False, "error": "Faltan campos"}), 400
 
+        enviar_correo_alerta(asunto, mensaje, destino)
+        
         return jsonify({
-            "status": "ok",
-            "msg": "Correo enviado (async)"
+            "success": True, 
+            "message": "Alerta enviada con éxito mediante Resend"
         })
-
     except Exception as e:
         return jsonify({
-            "status": "error",
-            "msg": str(e)
+            "success": False, 
+            "error_detalle": str(e)
         }), 500
-    
-    
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
