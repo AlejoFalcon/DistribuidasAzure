@@ -142,32 +142,34 @@ def listar_productos():
 
 
 @app.route("/enviar-alerta", methods=["POST"])
-def enviar_alerta():
+def enviar_correo_alerta(asunto, mensaje, destino):
+    if not EMAIL_USER or not EMAIL_PASSWORD:
+        raise ValueError("Faltan variables de entorno EMAIL")
+
+    msg = MIMEText(mensaje, "html")
+    msg["Subject"] = asunto
+    msg["From"] = EMAIL_USER
+    msg["To"] = destino
+
     try:
-        data = request.get_json()
+        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=20)
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
 
-        destino = data.get("to")
-        asunto = data.get("subject")
-        mensaje = data.get("message")
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        server.sendmail(EMAIL_USER, destino, msg.as_string())
 
-        if not destino or not asunto or not mensaje:
-            return jsonify({
-                "success": False,
-                "message": "Faltan datos"
-            }), 400
-
-        enviar_correo_alerta(asunto, mensaje, destino)
-
-        return jsonify({
-            "success": True,
-            "message": "Correo enviado"
-        })
+        server.quit()
 
     except Exception as e:
+        print("ERROR BACKEND:", str(e))
         return jsonify({
             "success": False,
             "error": str(e)
         }), 500
+    
+    
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
