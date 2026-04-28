@@ -1,9 +1,28 @@
 import os
-from flask import Flask, jsonify
+import smtplib
+from email.mime.text import MIMEText
+from flask import Flask, jsonify, request
 from mssql_python import connect
 
 app = Flask(__name__)
 
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+
+
+def enviar_correo_alerta(asunto, mensaje, destino):
+    if not EMAIL_USER or not EMAIL_PASSWORD:
+        raise ValueError("Faltan variables de entorno de correo")
+
+    msg = MIMEText(mensaje, "html")
+    msg["Subject"] = asunto
+    msg["From"] = EMAIL_USER
+    msg["To"] = destino
+
+    with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        server.send_message(msg)
 
 def get_connection():
     server = os.getenv("DB_SERVER")
@@ -121,6 +140,34 @@ def listar_productos():
         if conn:
             conn.close()
 
+
+@app.route("/enviar-alerta", methods=["POST"])
+def enviar_alerta():
+    try:
+        data = request.get_json()
+
+        destino = data.get("to")
+        asunto = data.get("subject")
+        mensaje = data.get("message")
+
+        if not destino or not asunto or not mensaje:
+            return jsonify({
+                "success": False,
+                "message": "Faltan datos"
+            }), 400
+
+        enviar_correo_alerta(asunto, mensaje, destino)
+
+        return jsonify({
+            "success": True,
+            "message": "Correo enviado"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
