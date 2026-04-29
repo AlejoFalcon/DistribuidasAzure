@@ -5,7 +5,11 @@ from flask_cors import CORS
 from mssql_python import connect
 
 app = Flask(__name__)
-CORS(app) 
+
+CORS(app, resources={
+    r"/enviar-alerta": {"origins": "*"}
+})
+CORS(app, supports_credentials=True)
 
 resend.api_key = os.getenv("RESEND_API_KEY")
 
@@ -140,27 +144,32 @@ def listar_productos():
             conn.close()
 
 
-@app.route("/enviar-alerta", methods=["POST"])
+@app.route("/enviar-alerta", methods=["POST", "OPTIONS"])
 def enviar_alerta():
+    if request.method == "OPTIONS":
+        return jsonify({"ok": True})
+
     try:
-        data = request.get_json(force=True)
+        data = request.get_json()
+
         destino = data.get("to")
         asunto = data.get("subject")
         mensaje = data.get("message")
-        
-        if not all([destino, asunto, mensaje]):
-             return jsonify({"success": False, "error": "Faltan campos"}), 400
+
+        if not destino or not asunto or not mensaje:
+            return jsonify({"success": False, "error": "Faltan campos"}), 400
 
         enviar_correo_alerta(asunto, mensaje, destino)
-        
+
         return jsonify({
-            "success": True, 
-            "message": "Alerta enviada con éxito mediante Resend"
+            "success": True,
+            "message": "Correo enviado"
         })
+
     except Exception as e:
         return jsonify({
-            "success": False, 
-            "error_detalle": str(e)
+            "success": False,
+            "error": str(e)
         }), 500
 
 if __name__ == "__main__":
