@@ -1,9 +1,11 @@
-import os 
+import os
 import resend
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from mssql_python import connect
 
 app = Flask(__name__)
+CORS(app) 
 
 resend.api_key = os.getenv("RESEND_API_KEY")
 
